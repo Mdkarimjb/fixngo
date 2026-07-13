@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { getServiceLocation } from '../../common/utils/service-locations';
 import {
   NearbyQueryDto,
   UpdateAvailabilityDto,
@@ -33,7 +35,8 @@ function startOfIstDay(from: Date): Date {
 function startOfIstMonth(from: Date): Date {
   const shifted = new Date(from.getTime() + IST_OFFSET_MS);
   return new Date(
-    Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), 1) - IST_OFFSET_MS,
+    Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), 1) -
+      IST_OFFSET_MS,
   );
 }
 
@@ -53,7 +56,15 @@ export class TechniciansService {
   }
 
   async updateProfile(userId: string, dto: UpdateTechnicianProfileDto) {
-    await this.getProfile(userId);
+    const current = await this.getProfile(userId);
+    const city = dto.city ?? current.city;
+    const locationName = dto.location ?? current.location;
+    const location = getServiceLocation(city, locationName);
+    if (!location) {
+      throw new BadRequestException(
+        'The selected location does not belong to the selected city',
+      );
+    }
     const skills = dto.skills?.map((skill) => skill.trim()).filter(Boolean);
     try {
       return await this.prisma.technician.update({
@@ -64,6 +75,20 @@ export class TechniciansService {
           bio: dto.bio?.trim(),
           experienceYears: dto.experienceYears,
           serviceArea: dto.serviceArea?.trim(),
+          city: dto.city,
+          location: dto.location,
+          lastLat:
+            dto.city !== undefined || dto.location !== undefined
+              ? location.lat
+              : undefined,
+          lastLng:
+            dto.city !== undefined || dto.location !== undefined
+              ? location.lng
+              : undefined,
+          locationUpdatedAt:
+            dto.city !== undefined || dto.location !== undefined
+              ? new Date()
+              : undefined,
           // Omit the field to leave email unchanged; send "" or null to clear it.
           user:
             dto.email === undefined
@@ -163,7 +188,11 @@ export class TechniciansService {
         where: { technicianId, status: { notIn: ['COMPLETED', 'CANCELLED'] } },
       }),
       this.prisma.job.count({
-        where: { technicianId, status: 'COMPLETED', completedAt: { gte: today } },
+        where: {
+          technicianId,
+          status: 'COMPLETED',
+          completedAt: { gte: today },
+        },
       }),
       this.prisma.job.count({ where: { technicianId, status: 'COMPLETED' } }),
       // A job's "activity date" falls back scheduledAt -> assignedAt -> createdAt,
@@ -256,6 +285,9 @@ export class TechniciansService {
         isVerified: true,
         experienceYears: true,
         serviceArea: true,
+        city: true,
+        location: true,
+        points: true,
         lastLat: true,
         lastLng: true,
         _count: { select: { jobs: true } },

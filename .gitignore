@@ -30,3 +30,6 @@ coverage/
 
 # PWA generated
 apps/web/dev-dist/
+
+# Local development uploads
+apps/api/uploads/

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -11,6 +12,7 @@ import { Role } from '../../common/enums/role.enum';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/auth.dto';
+import { getServiceLocation } from '../../common/utils/service-locations';
 
 interface Tokens {
   accessToken: string;
@@ -32,6 +34,16 @@ export class AuthService {
       ? await bcrypt.hash(dto.password, 12)
       : null;
 
+    const technicianLocation =
+      dto.role === Role.TECHNICIAN
+        ? getServiceLocation(dto.city ?? '', dto.location ?? '')
+        : null;
+    if (dto.role === Role.TECHNICIAN && !technicianLocation) {
+      throw new BadRequestException(
+        'The selected location does not belong to the selected city',
+      );
+    }
+
     const user = await this.prisma.user.create({
       data: {
         phone: dto.phone,
@@ -43,7 +55,16 @@ export class AuthService {
             : undefined,
         technician:
           dto.role === Role.TECHNICIAN
-            ? { create: { fullName: dto.fullName } }
+            ? {
+                create: {
+                  fullName: dto.fullName,
+                  city: dto.city,
+                  location: dto.location,
+                  lastLat: technicianLocation!.lat,
+                  lastLng: technicianLocation!.lng,
+                  locationUpdatedAt: new Date(),
+                },
+              }
             : undefined,
       },
     });

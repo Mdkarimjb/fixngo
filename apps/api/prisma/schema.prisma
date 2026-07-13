@@ -92,6 +92,9 @@ model Technician {
   bio                   String?
   experienceYears       Int       @default(0)
   serviceArea           String?
+  city                  String    @default("Guntur")
+  location              String    @default("Brodipet")
+  points                Int       @default(0)
   isAvailable           Boolean   @default(true)
   isVerified            Boolean   @default(false)
   rating                Float     @default(0)
@@ -107,27 +110,31 @@ model Technician {
 }
 
 model Job {
-  id           String      @id @default(uuid())
-  customer     Customer    @relation(fields: [customerId], references: [id])
-  customerId   String
-  technician   Technician? @relation(fields: [technicianId], references: [id])
-  technicianId String?
-  serviceType  String
-  description  String?
-  status       JobStatus   @default(REQUESTED)
-  lat          Float?
-  lng          Float?
-  scheduledAt  DateTime?
-  rating       Int?
-  feedback     String?
-  assignedAt   DateTime?
-  acceptedAt   DateTime?
-  onSiteAt     DateTime?
-  startedAt    DateTime?
-  completedAt  DateTime?
-  cancelledAt  DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  id            String      @id @default(uuid())
+  referenceCode String      @unique
+  city          String      @default("Guntur")
+  location      String      @default("Brodipet")
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  customerId    String
+  technician    Technician? @relation(fields: [technicianId], references: [id])
+  technicianId  String?
+  serviceType   String
+  description   String?
+  imageUrls     String[]    @default([])
+  status        JobStatus   @default(REQUESTED)
+  lat           Float?
+  lng           Float?
+  scheduledAt   DateTime?
+  rating        Int?
+  feedback      String?
+  assignedAt    DateTime?
+  acceptedAt    DateTime?
+  onSiteAt      DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   payment     Payment?
   assignments JobAssignment[]
@@ -167,12 +174,21 @@ model Payment {
 }
 
 model ProductListing {
-  id          String   @id @default(uuid())
-  customer    Customer @relation(fields: [customerId], references: [id])
-  customerId  String
-  title       String
-  description String?
-  pricePaise  Int
-  sold        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id            String   @id @default(uuid())
+  referenceCode String   @unique
+  city          String   @default("Guntur")
+  customer      Customer @relation(fields: [customerId], references: [id])
+  customerId    String
+  title         String
+  description   String?
+  imageUrls     String[] @default([])
+  pricePaise    Int
+  sold          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+}
+
+model ReferenceSequence {
+  key       String   @id
+  value     Int
+  updatedAt DateTime @updatedAt
 }

@@ -6,7 +6,10 @@ import {
   Patch,
   Post,
   UseGuards,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -21,9 +24,14 @@ import {
   CancelJobDto,
   CreateJobDto,
   DeclineJobDto,
+  InviteTechniciansDto,
   RateJobDto,
   UpdateJobStatusDto,
 } from './dto/job.dto';
+import {
+  imageUploadOptions,
+  imageUrls,
+} from '../../common/uploads/image-upload';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('jobs')
@@ -32,8 +40,13 @@ export class JobsController {
 
   @Roles(Role.CUSTOMER)
   @Post()
-  create(@CurrentUser() user: AuthUser, @Body() dto: CreateJobDto) {
-    return this.jobs.create(user.id, dto);
+  @UseInterceptors(FilesInterceptor('images', 4, imageUploadOptions))
+  create(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CreateJobDto,
+    @UploadedFiles() files?: Express.Multer.File[],
+  ) {
+    return this.jobs.create(user.id, dto, imageUrls(files));
   }
 
   @Roles(Role.CUSTOMER)
@@ -58,6 +71,24 @@ export class JobsController {
   @Patch(':id/assign')
   assign(@Param('id') id: string, @Body() dto: AssignJobDto) {
     return this.jobs.assign(id, dto);
+  }
+
+  @Roles(Role.ADMIN)
+  @Get(':id/candidates')
+  candidates(@Param('id') id: string) {
+    return this.jobs.candidates(id);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post(':id/invite')
+  invite(@Param('id') id: string, @Body() dto: InviteTechniciansDto) {
+    return this.jobs.invite(id, dto);
+  }
+
+  @Roles(Role.TECHNICIAN)
+  @Post(':id/accept-offer')
+  acceptOffer(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.jobs.acceptOffer(user.id, id);
   }
 
   @Roles(Role.TECHNICIAN)

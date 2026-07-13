@@ -7,12 +7,15 @@ import {
 import { AssignmentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { nextReferenceCode } from '../../common/utils/reference-code';
 import { JobStatus } from './job-status.enum';
+import { getServiceLocation } from '../../common/utils/service-locations';
 import {
   AssignJobDto,
   CancelJobDto,
   CreateJobDto,
   DeclineJobDto,
+  InviteTechniciansDto,
   RateJobDto,
   UpdateJobStatusDto,
 } from './dto/job.dto';
@@ -37,6 +40,22 @@ const JOB_CUSTOMER_INCLUDE = {
   },
 } satisfies Prisma.JobInclude;
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const deltaLat = radians(lat2 - lat1);
+  const deltaLng = radians(lng2 - lng1);
+  const value =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(radians(lat1)) *
+      Math.cos(radians(lat2)) *
+      Math.sin(deltaLng / 2) ** 2;
+  return (
+    Math.round(
+      6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)) * 10,
+    ) / 10
+  );
+}
+
 @Injectable()
 export class JobsService {
   constructor(
@@ -44,7 +63,7 @@ export class JobsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async create(userId: string, dto: CreateJobDto) {
+  async create(userId: string, dto: CreateJobDto, imageUrls: string[] = []) {
     const customer = await this.prisma.customer.findUniqueOrThrow({
       where: { userId },
     });
@@ -52,15 +71,28 @@ export class JobsService {
     if (scheduledAt && scheduledAt.getTime() < Date.now()) {
       throw new BadRequestException('scheduledAt must be in the future');
     }
-    return this.prisma.job.create({
-      data: {
-        customerId: customer.id,
-        serviceType: dto.serviceType,
-        description: dto.description,
-        scheduledAt,
-        lat: dto.lat,
-        lng: dto.lng,
-      },
+    const city = dto.city ?? 'Guntur';
+    const location = getServiceLocation(city, dto.location);
+    if (!location) {
+      throw new BadRequestException(
+        'The selected location does not belong to the selected city',
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const reference = await nextReferenceCode(tx, city, 'SRV');
+      return tx.job.create({
+        data: {
+          ...reference,
+          customerId: customer.id,
+          serviceType: dto.serviceType,
+          description: dto.description,
+          imageUrls,
+          location: dto.location,
+          scheduledAt,
+          lat: location.lat,
+          lng: location.lng,
+        },
+      });
     });
   }
 
@@ -78,7 +110,7 @@ export class JobsService {
     const tech = await this.prisma.technician.findUniqueOrThrow({
       where: { userId },
     });
-    return this.prisma.job.findMany({
+    const assigned = await this.prisma.job.findMany({
       where: { technicianId: tech.id },
       include: {
         customer: {
@@ -94,6 +126,188 @@ export class JobsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    const offers = await this.prisma.jobAssignment.findMany({
+      where: {
+        technicianId: tech.id,
+        status: 'PENDING',
+        job: { technicianId: null, status: 'REQUESTED' },
+      },
+      include: {
+        job: {
+          include: {
+            customer: {
+              select: {
+                fullName: true,
+                address: true,
+                user: { select: { phone: true } },
+              },
+            },
+            payment: {
+              select: { amount: true, currency: true, status: true },
+            },
+          },
+        },
+      },
+      orderBy: { assignedAt: 'desc' },
+    });
+    return [
+      ...offers.map((offer) => ({
+        ...offer.job,
+        isOffer: true,
+        offerId: offer.id,
+      })),
+      ...assigned.map((job) => ({ ...job, isOffer: false })),
+    ];
+  }
+
+  async candidates(jobId: string) {
+    const job = await this.getOrThrow(jobId);
+    const technicians = await this.prisma.technician.findMany({
+      where: {
+        city: job.city,
+        location: job.location,
+        isAvailable: true,
+        user: { isActive: true },
+      },
+      select: {
+        id: true,
+        fullName: true,
+        city: true,
+        location: true,
+        skills: true,
+        rating: true,
+        points: true,
+        isVerified: true,
+        lastLat: true,
+        lastLng: true,
+        _count: { select: { jobs: { where: { status: 'COMPLETED' } } } },
+      },
+    });
+    return technicians
+      .map((technician) => {
+        const distanceKm =
+          job.lat !== null &&
+          job.lng !== null &&
+          technician.lastLat !== null &&
+          technician.lastLng !== null
+            ? haversineKm(
+                job.lat,
+                job.lng,
+                technician.lastLat,
+                technician.lastLng,
+              )
+            : null;
+        const dispatchScore = Math.round(
+          technician.rating * 100 +
+            technician.points -
+            Math.min(distanceKm ?? 50, 50) * 2,
+        );
+        return { ...technician, distanceKm, dispatchScore };
+      })
+      .sort(
+        (a, b) =>
+          b.dispatchScore - a.dispatchScore ||
+          b.rating - a.rating ||
+          (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity),
+      );
+  }
+
+  async invite(jobId: string, dto: InviteTechniciansDto) {
+    const job = await this.getOrThrow(jobId);
+    if (job.status !== JobStatus.REQUESTED || job.technicianId) {
+      throw new BadRequestException(
+        'Only an unassigned requested job can be offered',
+      );
+    }
+    const technicians = await this.prisma.technician.findMany({
+      where: {
+        id: { in: dto.technicianIds },
+        city: job.city,
+        location: job.location,
+        isAvailable: true,
+        user: { isActive: true },
+      },
+      include: { user: { select: { id: true, phone: true } } },
+    });
+    if (technicians.length !== dto.technicianIds.length) {
+      throw new BadRequestException(
+        'Every selected technician must be active, available and registered in the job location',
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.jobAssignment.updateMany({
+        where: { jobId, status: 'PENDING' },
+        data: { status: 'CANCELLED', respondedAt: new Date() },
+      });
+      await tx.jobAssignment.createMany({
+        data: technicians.map((technician) => ({
+          jobId,
+          technicianId: technician.id,
+        })),
+      });
+    });
+
+    const message = `FixNGo job offer ${job.referenceCode}: ${job.serviceType} in ${job.location}, ${job.city}. Open the technician app to accept or decline.`;
+    await Promise.all(
+      technicians.flatMap((technician) => [
+        this.notifications.sendWhatsApp(technician.user.phone, message),
+        this.notifications.sendPush(
+          technician.user.id,
+          'New nearby job offer',
+          `${job.referenceCode} · ${job.serviceType}`,
+        ),
+      ]),
+    );
+    return { invited: technicians.length, referenceCode: job.referenceCode };
+  }
+
+  async acceptOffer(userId: string, jobId: string) {
+    const tech = await this.prisma.technician.findUniqueOrThrow({
+      where: { userId },
+    });
+    const accepted = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Job" WHERE id = ${jobId} FOR UPDATE`;
+      const job = await tx.job.findUnique({ where: { id: jobId } });
+      const offer = await tx.jobAssignment.findFirst({
+        where: { jobId, technicianId: tech.id, status: 'PENDING' },
+      });
+      if (!job || !offer)
+        throw new NotFoundException('Active job offer not found');
+      if (job.status !== JobStatus.REQUESTED || job.technicianId) {
+        throw new BadRequestException(
+          'This job was already accepted by another technician',
+        );
+      }
+      const now = new Date();
+      await tx.job.update({
+        where: { id: jobId },
+        data: {
+          technicianId: tech.id,
+          status: JobStatus.ACCEPTED,
+          assignedAt: now,
+          acceptedAt: now,
+        },
+      });
+      await tx.jobAssignment.update({
+        where: { id: offer.id },
+        data: { status: 'ACCEPTED', respondedAt: now },
+      });
+      await tx.jobAssignment.updateMany({
+        where: { jobId, id: { not: offer.id }, status: 'PENDING' },
+        data: { status: 'CANCELLED', respondedAt: now },
+      });
+      return tx.job.findUniqueOrThrow({
+        where: { id: jobId },
+        include: JOB_CUSTOMER_INCLUDE,
+      });
+    });
+    await this.notifications.sendPush(
+      accepted.customer.user.id,
+      'Technician assigned',
+      `${accepted.referenceCode} has been accepted`,
+    );
+    return accepted;
   }
 
   async listAll() {
@@ -126,7 +340,9 @@ export class JobsService {
   async assign(jobId: string, dto: AssignJobDto) {
     const existingJob = await this.getOrThrow(jobId);
     if (CLOSED_STATUSES.includes(existingJob.status as JobStatus)) {
-      throw new BadRequestException('Completed or cancelled jobs cannot be assigned');
+      throw new BadRequestException(
+        'Completed or cancelled jobs cannot be assigned',
+      );
     }
     if (existingJob.technicianId === dto.technicianId) {
       throw new BadRequestException(
@@ -134,61 +350,63 @@ export class JobsService {
       );
     }
 
-    const { job, technicianUserId } = await this.prisma.$transaction(async (tx) => {
-      // Lock the technician row first so a concurrent assign() targeting the
-      // same technician blocks here instead of both transactions reading the
-      // same (possibly stale) isAvailable value.
-      await tx.$queryRaw`SELECT id FROM "Technician" WHERE id = ${dto.technicianId} FOR UPDATE`;
-      const technician = await tx.technician.findUnique({
-        where: { id: dto.technicianId },
-        include: { user: { select: { id: true, isActive: true } } },
-      });
-      if (!technician || !technician.user.isActive) {
-        throw new NotFoundException('Technician not found');
-      }
-      if (!technician.isAvailable) {
-        throw new BadRequestException('Technician is currently unavailable');
-      }
+    const { job, technicianUserId } = await this.prisma.$transaction(
+      async (tx) => {
+        // Lock the technician row first so a concurrent assign() targeting the
+        // same technician blocks here instead of both transactions reading the
+        // same (possibly stale) isAvailable value.
+        await tx.$queryRaw`SELECT id FROM "Technician" WHERE id = ${dto.technicianId} FOR UPDATE`;
+        const technician = await tx.technician.findUnique({
+          where: { id: dto.technicianId },
+          include: { user: { select: { id: true, isActive: true } } },
+        });
+        if (!technician || !technician.user.isActive) {
+          throw new NotFoundException('Technician not found');
+        }
+        if (!technician.isAvailable) {
+          throw new BadRequestException('Technician is currently unavailable');
+        }
 
-      await this.guardedUpdate(tx, {
-        where: { id: jobId, status: existingJob.status },
-        data: {
-          technicianId: dto.technicianId,
-          status: JobStatus.ASSIGNED,
-          assignedAt: new Date(),
-          acceptedAt: null,
-          onSiteAt: null,
-          startedAt: null,
-          completedAt: null,
-          cancelledAt: null,
-        },
-      });
-      // Void any assignment left over from a previous technician, whether it
-      // was still awaiting a response or had already been accepted.
-      await this.voidActiveAssignments(tx, jobId, { status: 'CANCELLED' });
-      await tx.jobAssignment.create({
-        data: { jobId, technicianId: dto.technicianId },
-      });
-      const updatedJob = await tx.job.findUniqueOrThrow({
-        where: { id: jobId },
-        include: {
-          ...JOB_CUSTOMER_INCLUDE,
-          technician: {
-            select: {
-              id: true,
-              fullName: true,
-              rating: true,
-              skills: true,
-              isAvailable: true,
+        await this.guardedUpdate(tx, {
+          where: { id: jobId, status: existingJob.status },
+          data: {
+            technicianId: dto.technicianId,
+            status: JobStatus.ASSIGNED,
+            assignedAt: new Date(),
+            acceptedAt: null,
+            onSiteAt: null,
+            startedAt: null,
+            completedAt: null,
+            cancelledAt: null,
+          },
+        });
+        // Void any assignment left over from a previous technician, whether it
+        // was still awaiting a response or had already been accepted.
+        await this.voidActiveAssignments(tx, jobId, { status: 'CANCELLED' });
+        await tx.jobAssignment.create({
+          data: { jobId, technicianId: dto.technicianId },
+        });
+        const updatedJob = await tx.job.findUniqueOrThrow({
+          where: { id: jobId },
+          include: {
+            ...JOB_CUSTOMER_INCLUDE,
+            technician: {
+              select: {
+                id: true,
+                fullName: true,
+                rating: true,
+                skills: true,
+                isAvailable: true,
+              },
+            },
+            payment: {
+              select: { amount: true, currency: true, status: true },
             },
           },
-          payment: {
-            select: { amount: true, currency: true, status: true },
-          },
-        },
-      });
-      return { job: updatedJob, technicianUserId: technician.user.id };
-    });
+        });
+        return { job: updatedJob, technicianUserId: technician.user.id };
+      },
+    );
     await this.notifications.sendPush(
       technicianUserId,
       'New job assigned',
@@ -241,6 +459,12 @@ export class JobsService {
           data: { status: 'ACCEPTED', respondedAt: now },
         });
       }
+      if (dto.status === JobStatus.COMPLETED) {
+        await tx.technician.update({
+          where: { id: tech.id },
+          data: { points: { increment: 10 } },
+        });
+      }
       return tx.job.findUniqueOrThrow({
         where: { id: jobId },
         include: {
@@ -263,6 +487,19 @@ export class JobsService {
       where: { userId },
     });
     const job = await this.getOrThrow(jobId);
+    if (!job.technicianId && job.status === JobStatus.REQUESTED) {
+      const declined = await this.prisma.jobAssignment.updateMany({
+        where: { jobId, technicianId: tech.id, status: 'PENDING' },
+        data: {
+          status: 'DECLINED',
+          declineReason: dto.reason?.trim() || null,
+          respondedAt: new Date(),
+        },
+      });
+      if (declined.count !== 1)
+        throw new NotFoundException('Active job offer not found');
+      return job;
+    }
     if (job.technicianId !== tech.id) {
       throw new ForbiddenException('Not your job');
     }
@@ -273,7 +510,8 @@ export class JobsService {
     }
     // Only a flat refusal before ever accepting counts against acceptance
     // rate; backing out after accepting/arriving is a different failure mode.
-    const assignmentOutcome = job.status === JobStatus.ASSIGNED ? 'DECLINED' : 'CANCELLED';
+    const assignmentOutcome =
+      job.status === JobStatus.ASSIGNED ? 'DECLINED' : 'CANCELLED';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.guardedUpdate(tx, {
@@ -390,7 +628,9 @@ export class JobsService {
   ) {
     const result = await tx.job.updateMany(args);
     if (result.count !== 1) {
-      throw new BadRequestException('Job status changed; refresh and try again');
+      throw new BadRequestException(
+        'Job status changed; refresh and try again',
+      );
     }
     return result;
   }

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateListingDto, UpdateCustomerDto } from './dto/customer.dto';
+import { nextReferenceCode } from '../../common/utils/reference-code';
 
 @Injectable()
 export class CustomersService {
@@ -24,10 +25,18 @@ export class CustomersService {
     });
   }
 
-  async createListing(userId: string, dto: CreateListingDto) {
+  async createListing(
+    userId: string,
+    dto: CreateListingDto,
+    imageUrls: string[] = [],
+  ) {
     const customer = await this.getProfile(userId);
-    return this.prisma.productListing.create({
-      data: { ...dto, customerId: customer.id },
+    const { city: requestedCity, ...listing } = dto;
+    return this.prisma.$transaction(async (tx) => {
+      const reference = await nextReferenceCode(tx, requestedCity, 'SEL');
+      return tx.productListing.create({
+        data: { ...listing, ...reference, imageUrls, customerId: customer.id },
+      });
     });
   }
 
@@ -35,6 +44,24 @@ export class CustomersService {
     const customer = await this.getProfile(userId);
     return this.prisma.productListing.findMany({
       where: { customerId: customer.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async listPublicListings() {
+    return this.prisma.productListing.findMany({
+      where: { sold: false },
+      select: {
+        id: true,
+        referenceCode: true,
+        city: true,
+        title: true,
+        description: true,
+        imageUrls: true,
+        pricePaise: true,
+        createdAt: true,
+        customer: { select: { fullName: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

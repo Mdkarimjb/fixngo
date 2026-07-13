@@ -1,16 +1,20 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { uploadDirectory } from './common/uploads/image-upload';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: true,
     rawBody: true,
   });
   const config = app.get(ConfigService);
+
+  app.useStaticAssets(uploadDirectory, { prefix: '/api/uploads/' });
 
   // Security headers.
   app.use(helmet());

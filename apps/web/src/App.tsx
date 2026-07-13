@@ -1,10 +1,18 @@
-import { BrowserRouter, Routes, Route, useLocation, useNavigate, type Location } from 'react-router-dom';
-import { RequireRole } from './components/RequireRole';
-import { Home } from './pages/Home';
-import { Login } from './pages/Login';
-import { CustomerHome } from './pages/CustomerHome';
-import { TechnicianHome } from './pages/TechnicianHome';
-import { AdminHome } from './pages/AdminHome';
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useLocation,
+  useNavigate,
+  type Location,
+} from "react-router-dom";
+import { RequireRole } from "./components/RequireRole";
+import { Home } from "./pages/Home";
+import { Login } from "./pages/Login";
+import { CustomerHome } from "./pages/CustomerHome";
+import { TechnicianHome } from "./pages/TechnicianHome";
+import { AdminHome } from "./pages/AdminHome";
+import { Signup } from "./pages/TechnicianRegister";
 
 /**
  * Single app, role-based routing. The same PWA renders Customer, Technician,
@@ -29,11 +37,13 @@ function AppRoutes() {
       <Routes location={backgroundLocation ?? location}>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/technician/register" element={<Signup />} />
 
         <Route
           path="/customer"
           element={
-            <RequireRole allow={['CUSTOMER']}>
+            <RequireRole allow={["CUSTOMER"]}>
               <CustomerHome />
             </RequireRole>
           }
@@ -41,7 +51,7 @@ function AppRoutes() {
         <Route
           path="/technician"
           element={
-            <RequireRole allow={['TECHNICIAN']}>
+            <RequireRole allow={["TECHNICIAN"]}>
               <TechnicianHome />
             </RequireRole>
           }
@@ -49,7 +59,7 @@ function AppRoutes() {
         <Route
           path="/admin"
           element={
-            <RequireRole allow={['ADMIN']}>
+            <RequireRole allow={["ADMIN"]}>
               <AdminHome />
             </RequireRole>
           }
@@ -58,7 +68,14 @@ function AppRoutes() {
 
       {backgroundLocation && (
         <Routes>
-          <Route path="/login" element={<Login modal onClose={() => navigate(-1)} />} />
+          <Route
+            path="/login"
+            element={<Login modal onClose={() => navigate(-1)} />}
+          />
+          <Route
+            path="/signup"
+            element={<Signup modal onClose={() => navigate(-1)} />}
+          />
         </Routes>
       )}
     </>

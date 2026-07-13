@@ -31,11 +31,17 @@ import {
   money,
 } from "../lib/utils";
 import { JobTracker } from "../components/JobTicket";
+import { CITY_OPTIONS, locationsForCity } from "../lib/cities";
 
 interface TechnicianJob {
   id: string;
+  referenceCode: string;
+  city: string;
+  location: string;
+  isOffer: boolean;
   serviceType: string;
   description: string | null;
+  imageUrls: string[];
   status: string;
   lat: number | null;
   lng: number | null;
@@ -56,6 +62,9 @@ interface TechProfile {
   bio: string | null;
   experienceYears: number;
   serviceArea: string | null;
+  city: string;
+  location: string;
+  points: number;
   isAvailable: boolean;
   isVerified: boolean;
   rating: number;
@@ -95,6 +104,8 @@ interface ProfilePayload {
   bio: string;
   experienceYears: number;
   serviceArea: string;
+  city: string;
+  location: string;
 }
 
 const NEXT_STATUS: Record<string, string> = {
@@ -155,6 +166,11 @@ export function TechnicianHome() {
   const declineJob = useMutation({
     mutationFn: async (id: string) =>
       (await api.post(`/jobs/${id}/decline`, {})).data,
+    onSuccess: refreshTechnicianData,
+  });
+  const acceptOffer = useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/jobs/${id}/accept-offer`, {})).data,
     onSuccess: refreshTechnicianData,
   });
 
@@ -252,7 +268,7 @@ export function TechnicianHome() {
           icon={Star}
           label="Customer rating"
           value={dashboard ? dashboard.performance.rating.toFixed(1) : "—"}
-          note={`${dashboard?.performance.ratingCount ?? 0} customer ratings`}
+          note={`${profile?.points ?? 0} service points · ${dashboard?.performance.ratingCount ?? 0} ratings`}
           tone="amber"
           loading={dashboardQuery.isLoading}
         />
@@ -302,17 +318,26 @@ export function TechnicianHome() {
                     busy={
                       (advanceStatus.isPending &&
                         advanceStatus.variables?.id === job.id) ||
-                      (declineJob.isPending && declineJob.variables === job.id)
+                      (declineJob.isPending &&
+                        declineJob.variables === job.id) ||
+                      (acceptOffer.isPending &&
+                        acceptOffer.variables === job.id)
                     }
                     onAdvance={(status) =>
                       advanceStatus.mutate({ id: job.id, status })
                     }
                     onDecline={() => declineJob.mutate(job.id)}
+                    onAcceptOffer={() => acceptOffer.mutate(job.id)}
                     error={
                       (advanceStatus.isError &&
                         advanceStatus.variables?.id === job.id) ||
-                      (declineJob.isError && declineJob.variables === job.id)
-                        ? apiErrorMessage(advanceStatus.error || declineJob.error)
+                      (declineJob.isError && declineJob.variables === job.id) ||
+                      (acceptOffer.isError && acceptOffer.variables === job.id)
+                        ? apiErrorMessage(
+                            advanceStatus.error ||
+                              declineJob.error ||
+                              acceptOffer.error,
+                          )
                         : null
                     }
                   />
@@ -521,6 +546,7 @@ function TechnicianJobCard({
   busy,
   onAdvance,
   onDecline,
+  onAcceptOffer,
   error,
 }: {
   job: TechnicianJob;
@@ -528,6 +554,7 @@ function TechnicianJobCard({
   busy: boolean;
   onAdvance: (status: string) => void;
   onDecline: () => void;
+  onAcceptOffer: () => void;
   error: string | null;
 }) {
   const next = NEXT_STATUS[job.status];
@@ -550,11 +577,11 @@ function TechnicianJobCard({
               <span
                 className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${JOB_STATUS_STYLES[job.status] ?? "bg-slate-100 text-slate-600"}`}
               >
-                {formatJobStatus(job.status)}
+                {job.isOffer ? "New offer" : formatJobStatus(job.status)}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Job #{job.id.slice(0, 8).toUpperCase()}
+              Job {job.referenceCode} · {job.location}, {job.city}
               {job.scheduledAt ? ` · ${formatDateTime(job.scheduledAt)}` : ""}
             </p>
           </div>
@@ -592,6 +619,25 @@ function TechnicianJobCard({
           {job.description}
         </p>
       )}
+      {job.imageUrls.length > 0 && (
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {job.imageUrls.map((url, imageIndex) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="overflow-hidden rounded-xl border border-slate-200"
+            >
+              <img
+                src={url}
+                alt={`Customer issue ${imageIndex + 1}`}
+                className="aspect-square h-full w-full object-cover transition hover:scale-105"
+              />
+            </a>
+          ))}
+        </div>
+      )}
       {!["CANCELLED"].includes(job.status) && (
         <div className="mt-4 rounded-xl bg-slate-50 p-3">
           <JobTracker current={Math.max(0, jobStepIndex(job.status))} />
@@ -616,18 +662,37 @@ function TechnicianJobCard({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {["ASSIGNED", "ACCEPTED", "ON_SITE", "IN_PROGRESS"].includes(
-            job.status,
-          ) && (
-            <button
-              onClick={onDecline}
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              <XCircle className="h-4 w-4" />{" "}
-              {job.status === "ASSIGNED" ? "Decline" : "Cancel job"}
-            </button>
+          {job.isOffer && (
+            <>
+              <button
+                onClick={onDecline}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <XCircle className="h-4 w-4" /> Decline offer
+              </button>
+              <button
+                onClick={onAcceptOffer}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              >
+                Accept offer <ArrowRight className="h-4 w-4" />
+              </button>
+            </>
           )}
+          {!job.isOffer &&
+            ["ASSIGNED", "ACCEPTED", "ON_SITE", "IN_PROGRESS"].includes(
+              job.status,
+            ) && (
+              <button
+                onClick={onDecline}
+                disabled={busy}
+                className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                <XCircle className="h-4 w-4" />{" "}
+                {job.status === "ASSIGNED" ? "Decline" : "Cancel job"}
+              </button>
+            )}
           {next && (
             <button
               onClick={() => onAdvance(next)}
@@ -668,6 +733,8 @@ function ProfileEditor({
     bio: "",
     experienceYears: "0",
     serviceArea: "",
+    city: "Guntur",
+    location: "Brodipet",
   });
   useEffect(() => {
     if (profile)
@@ -678,6 +745,8 @@ function ProfileEditor({
         bio: profile.bio ?? "",
         experienceYears: String(profile.experienceYears),
         serviceArea: profile.serviceArea ?? "",
+        city: profile.city,
+        location: profile.location,
       });
   }, [profile]);
   const save = useMutation({
@@ -700,6 +769,8 @@ function ProfileEditor({
       bio: form.bio.trim(),
       experienceYears: Number(form.experienceYears) || 0,
       serviceArea: form.serviceArea.trim(),
+      city: form.city,
+      location: form.location,
     });
   }
   const field = (name: keyof typeof form) => ({
@@ -745,6 +816,49 @@ function ProfileEditor({
             className="dashboard-input mt-1.5"
             {...field("serviceArea")}
           />
+        </label>
+        <label className="text-sm font-bold text-slate-700">
+          Registered city
+          <select
+            className="dashboard-input mt-1.5"
+            value={form.city}
+            onChange={(event) =>
+              setForm((current) => {
+                const city = event.target.value;
+                return {
+                  ...current,
+                  city,
+                  location: locationsForCity(city)[0] ?? "",
+                };
+              })
+            }
+          >
+            {CITY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-bold text-slate-700">
+          Registered service location
+          <select
+            required
+            className="dashboard-input mt-1.5"
+            value={form.location}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                location: event.target.value,
+              }))
+            }
+          >
+            {locationsForCity(form.city).map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="text-sm font-bold text-slate-700">
           Experience (years)

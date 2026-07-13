@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
+import { CITY_OPTIONS } from '../lib/cities';
 import { initials } from '../lib/utils';
 
 interface Props {
@@ -76,6 +77,7 @@ export function RoleLayout({ title, subtitle, userName, children }: Props) {
   const role = user?.role ?? 'CUSTOMER';
   const nav = ROLE_NAV[role] ?? ROLE_NAV.CUSTOMER;
   const profile = ROLE_COPY[role] ?? ROLE_COPY.CUSTOMER;
+  const [city, setCity] = useState('Guntur');
   const displayName = userName ?? (role === 'TECHNICIAN' ? 'Service Partner' : role === 'ADMIN' ? 'Admin User' : 'Vijay Kumar');
   const displayInitials = initials(displayName, profile.initials);
 
@@ -124,7 +126,7 @@ export function RoleLayout({ title, subtitle, userName, children }: Props) {
               <input aria-label="Search dashboard" placeholder="Search jobs, services, customers…" className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
             </label>
             <div className="ml-auto flex items-center gap-2 sm:gap-3">
-              <button type="button" className="hidden items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 xl:flex"><MapPin className="h-4 w-4 text-primary" /> Guntur <ChevronDown className="h-3.5 w-3.5" /></button>
+              <label className="relative hidden items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 xl:flex"><MapPin className="h-4 w-4 text-primary" /><select aria-label="Select workspace city" value={city} onChange={(event) => setCity(event.target.value)} className="appearance-none bg-transparent pr-4 outline-none">{CITY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select><ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" /></label>
               <button aria-label="Notifications" type="button" className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"><Bell className="h-[18px] w-[18px]" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ring-2 ring-white" /></button>
               <div className="hidden h-8 w-px bg-slate-200 sm:block" />
               <div className="flex items-center gap-2">

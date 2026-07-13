@@ -1,4 +1,13 @@
-import { IsInt, IsOptional, IsString, Length, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { SUPPORTED_CITIES } from '../../../common/utils/reference-code';
 
 export class UpdateCustomerDto {
   @IsOptional()
@@ -22,7 +31,14 @@ export class CreateListingDto {
   @Length(0, 1000)
   description?: string;
 
+  @IsOptional()
+  @IsString()
+  @IsIn(SUPPORTED_CITIES)
+  @Length(2, 80)
+  city?: string;
+
   @IsInt()
   @Min(0)
+  @Type(() => Number)
   pricePaise!: number;
 }

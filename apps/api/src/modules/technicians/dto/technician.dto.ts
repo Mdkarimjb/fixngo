@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsEmail,
   IsInt,
+  IsIn,
   IsLatitude,
   IsLongitude,
   IsOptional,
@@ -14,6 +15,8 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
+import { SUPPORTED_CITIES } from '../../../common/utils/reference-code';
+import { SERVICE_LOCATION_NAMES } from '../../../common/utils/service-locations';
 
 export class UpdateLocationDto {
   @Type(() => Number)
@@ -64,6 +67,16 @@ export class UpdateTechnicianProfileDto {
   @IsString()
   @Length(0, 120)
   serviceArea?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(SUPPORTED_CITIES)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(SERVICE_LOCATION_NAMES)
+  location?: string;
 }
 
 export class NearbyQueryDto {
