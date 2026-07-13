@@ -1,0 +1,24 @@
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py "home services booking" --design-system -p "FixNGo"
+
+claude mcp add --transport http 21st https://21st.dev/api/mcp --header "x-api-key: $API_KEY_21ST"... this is the mcp server 21st.dev connect it.
+
+https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.. add this skill to claude for ui/ux design
+
+python3 .claude/skills/ui-ux-pro-max/scripts/search.py "home services booking" --design-system -p "FixNGo"
+
+
+http://localhost:5173/technician ---9876543210--0000
+http://localhost:5173/customer --- +9112345678--0000
+http://localhost:5173/admin. --9876500000 --0000
+
+
+
+Role	       Phone	     OTP
+Customer	 any new number	0000
+Technician	 9876543210	    0000
+Admin	     9876500000 	0000
+
+
+
+CLAUDE_BIN="/Users/karim/Library/Application Support/Claude/claude-code/2.1.205/claude.app/Contents/MacOS/claude"
+"$CLAUDE_BIN" plugin install code-review@claude-plugins-official 2>&1

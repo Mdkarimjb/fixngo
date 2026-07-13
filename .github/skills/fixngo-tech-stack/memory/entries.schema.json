@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FixNGo Agent Memory Store",
+  "type": "object",
+  "required": ["entries"],
+  "properties": {
+    "policy": {
+      "type": "object",
+      "properties": {
+        "promoteAfterDays": { "type": "integer", "minimum": 0, "description": "Min age in days before a verified entry can be promoted" },
+        "requireVerified": { "type": "boolean", "description": "If true, only verified entries are promoted" },
+        "captureEnabled": { "type": "boolean", "description": "If false, the capture hook records nothing" },
+        "maxAutoEntries": { "type": "integer", "minimum": 0, "description": "Cap on auto-captured unverified entries; oldest dropped first" },
+        "noteMaxChars": { "type": "integer", "minimum": 1, "description": "Max characters stored per captured note" },
+        "target": { "type": "string" },
+        "lastGateAt": { "type": "string", "format": "date-time", "description": "Watermark set by gate-hook.mjs; change entries captured at or before this are not re-gated" },
+        "dream": {
+          "type": "object",
+          "description": "Consolidation (\"dreaming\") settings",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "consolidateAfterDays": { "type": "integer", "minimum": 0, "description": "Raw entries older than this are rolled into digests" },
+            "dropNoise": { "type": "boolean", "description": "Prune empty/Unknown events" },
+            "maxDigestThemes": { "type": "integer", "minimum": 1, "description": "Top themes kept in each digest note" },
+            "archive": { "type": "boolean", "description": "Archive originals to memory/archive/<YYYY-MM>.jsonl" }
+          }
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "note", "verified", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique slug, e.g. 2026-07-06-razorpay-webhook" },
+          "category": { "type": "string", "description": "Grouping heading in verified-knowledge.md, e.g. Payments, Auth, Maps" },
+          "note": { "type": "string", "description": "The learning/fact captured" },
+          "verified": { "type": "boolean", "description": "True once confirmed correct in practice" },
+          "createdAt": { "type": "string", "format": "date", "description": "YYYY-MM-DD when recorded" },
+          "source": { "type": "string", "enum": ["prompt", "change", "event", "dream"], "description": "Set on auto-captured entries by the capture hook, or 'dream' on consolidated digests" },
+          "capturedAt": { "type": "string", "format": "date-time", "description": "ISO timestamp of automatic capture" },
+          "occurrences": { "type": "integer", "minimum": 1, "description": "How many raw captures a deduped/digest entry represents" },
+          "lastSeen": { "type": "string", "format": "date-time", "description": "Most recent capture time for a deduped entry" },
+          "dreamedAt": { "type": "string", "format": "date-time", "description": "ISO timestamp when a digest was created by dreaming" }
+        }
+      }
+    }
+  }
+}

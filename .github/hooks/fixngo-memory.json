@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "node .github/skills/fixngo-tech-stack/scripts/capture-memory.mjs",
+        "timeout": 10
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "node .github/skills/fixngo-tech-stack/scripts/capture-memory.mjs",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node .github/skills/fixngo-tech-stack/scripts/gate-hook.mjs",
+        "timeout": 180
+      },
+      {
+        "type": "command",
+        "command": "node .github/skills/fixngo-tech-stack/scripts/dream-memory.mjs",
+        "timeout": 20
+      }
+    ]
+  }
+}

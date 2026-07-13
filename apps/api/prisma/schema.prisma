@@ -1,0 +1,140 @@
+// FixNGo Prisma schema.
+// PostGIS: enable with `CREATE EXTENSION IF NOT EXISTS postgis;` in a migration.
+// Technician.lastLng/lastLat back a geography(Point) column + GiST index added via
+// raw SQL migration for "nearby technicians" queries (ST_DWithin).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum Role {
+  CUSTOMER
+  TECHNICIAN
+  ADMIN
+}
+
+enum JobStatus {
+  REQUESTED
+  ASSIGNED
+  ACCEPTED
+  ON_SITE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String      @id @default(uuid())
+  phone        String      @unique
+  email        String?     @unique
+  passwordHash String?
+  role         Role        @default(CUSTOMER)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  customer     Customer?
+  technician   Technician?
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @unique
+  fullName  String
+  address   String?
+  createdAt DateTime @default(now())
+
+  jobs      Job[]
+  listings  ProductListing[]
+}
+
+model Technician {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String   @unique
+  fullName   String
+  skills     String[]
+  isAvailable Boolean @default(true)
+  rating     Float    @default(0)
+  lastLat    Float?
+  lastLng    Float?
+  createdAt  DateTime @default(now())
+
+  jobs       Job[]
+}
+
+model Job {
+  id           String     @id @default(uuid())
+  customer     Customer   @relation(fields: [customerId], references: [id])
+  customerId   String
+  technician   Technician? @relation(fields: [technicianId], references: [id])
+  technicianId String?
+  serviceType  String
+  description  String?
+  status       JobStatus  @default(REQUESTED)
+  lat          Float?
+  lng          Float?
+  scheduledAt  DateTime?
+  rating       Int?
+  feedback     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  payment      Payment?
+
+  @@index([status])
+  @@index([technicianId])
+}
+
+model Payment {
+  id                String        @id @default(uuid())
+  job               Job           @relation(fields: [jobId], references: [id])
+  jobId             String        @unique
+  amount            Int           // in paise
+  currency          String        @default("INR")
+  status            PaymentStatus @default(CREATED)
+  provider          String        @default("razorpay")
+  providerOrderId   String?
+  providerPaymentId String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model ProductListing {
+  id          String   @id @default(uuid())
+  customer    Customer @relation(fields: [customerId], references: [id])
+  customerId  String
+  title       String
+  description String?
+  pricePaise  Int
+  sold        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}

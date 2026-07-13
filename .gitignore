@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Secrets — MCP config contains an API key; never commit it
+.vscode/mcp.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+*.swp
+
+# Test / coverage
+coverage/
+
+# PWA generated
+apps/web/dev-dist/

@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: fixngo-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fixngo
+    ports:
+      - '5432:5432'
+    volumes:
+      - fixngo-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d fixngo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: fixngo-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - fixngo-redis-data:/data
+
+volumes:
+  fixngo-db-data:
+  fixngo-redis-data:
