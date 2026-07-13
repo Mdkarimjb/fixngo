@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Phone, KeyRound, Wrench, ArrowRight, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useAuth, decodeUser } from '../store/auth';
-import { roleHomePath } from '../components/RoleLayout';
+import { roleHomePath } from '../lib/utils';
 import type { Tokens } from '../types';
 
 /** OTP-based login (MSG91 on the backend). Two steps: request → verify. */

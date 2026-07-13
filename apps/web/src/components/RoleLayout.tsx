@@ -24,13 +24,14 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
+import { initials } from '../lib/utils';
 
 interface Props {
   title: string;
   subtitle?: string;
+  userName?: string;
   children: ReactNode;
 }
-
 interface NavItem {
   label: string;
   href: string;
@@ -68,13 +69,15 @@ const ROLE_COPY: Record<string, { label: string; initials: string }> = {
 };
 
 /** Responsive shared application shell for all authenticated FixNGo roles. */
-export function RoleLayout({ title, subtitle, children }: Props) {
+export function RoleLayout({ title, subtitle, userName, children }: Props) {
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
   const clear = useAuth((s) => s.clear);
   const role = user?.role ?? 'CUSTOMER';
   const nav = ROLE_NAV[role] ?? ROLE_NAV.CUSTOMER;
   const profile = ROLE_COPY[role] ?? ROLE_COPY.CUSTOMER;
+  const displayName = userName ?? (role === 'TECHNICIAN' ? 'Service Partner' : role === 'ADMIN' ? 'Admin User' : 'Vijay Kumar');
+  const displayInitials = initials(displayName, profile.initials);
 
   function logout() {
     clear();
@@ -125,8 +128,8 @@ export function RoleLayout({ title, subtitle, children }: Props) {
               <button aria-label="Notifications" type="button" className="relative rounded-xl border border-slate-200 p-2.5 text-slate-600 hover:bg-slate-50"><Bell className="h-[18px] w-[18px]" /><span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent ring-2 ring-white" /></button>
               <div className="hidden h-8 w-px bg-slate-200 sm:block" />
               <div className="flex items-center gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-black text-white">{profile.initials}</span>
-                <div className="hidden leading-tight sm:block"><p className="text-sm font-bold">{role === 'TECHNICIAN' ? 'Ravi Kumar' : role === 'ADMIN' ? 'Admin User' : 'Vijay Kumar'}</p><p className="text-[11px] text-slate-500">{profile.label}</p></div>
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-black text-white">{displayInitials}</span>
+                <div className="hidden leading-tight sm:block"><p className="text-sm font-bold">{displayName}</p><p className="text-[11px] text-slate-500">{profile.label}</p></div>
               </div>
               <button onClick={logout} aria-label="Sign out" title="Sign out" className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><LogOut className="h-[18px] w-[18px]" /></button>
             </div>
@@ -149,13 +152,4 @@ export function RoleLayout({ title, subtitle, children }: Props) {
       </nav>
     </div>
   );
-}
-
-export function roleHomePath(role: string | undefined): string {
-  switch (role) {
-    case 'CUSTOMER': return '/customer';
-    case 'TECHNICIAN': return '/technician';
-    case 'ADMIN': return '/admin';
-    default: return '/login';
-  }
 }

@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
-import { roleHomePath } from '../components/RoleLayout';
+import { roleHomePath } from '../lib/utils';
 import { JobTracker } from '../components/JobTicket';
 
 interface Service {
@@ -28,7 +28,6 @@ interface Service {
   price: number;
   sprite: number;
 }
-
 const SERVICES: Service[] = [
   { name: 'AC Repair', price: 299, sprite: 0 },
   { name: 'Plumbing', price: 149, sprite: 1 },

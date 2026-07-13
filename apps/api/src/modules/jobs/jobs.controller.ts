@@ -18,7 +18,9 @@ import { Role } from '../../common/enums/role.enum';
 import { JobsService } from './jobs.service';
 import {
   AssignJobDto,
+  CancelJobDto,
   CreateJobDto,
+  DeclineJobDto,
   RateJobDto,
   UpdateJobStatusDto,
 } from './dto/job.dto';
@@ -68,6 +70,16 @@ export class JobsController {
     return this.jobs.updateStatus(user.id, id, dto);
   }
 
+  @Roles(Role.TECHNICIAN)
+  @Post(':id/decline')
+  decline(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: DeclineJobDto,
+  ) {
+    return this.jobs.decline(user.id, id, dto);
+  }
+
   @Roles(Role.CUSTOMER)
   @Patch(':id/rate')
   rate(
@@ -76,5 +88,11 @@ export class JobsController {
     @Body() dto: RateJobDto,
   ) {
     return this.jobs.rate(user.id, id, dto);
+  }
+
+  @Roles(Role.ADMIN)
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @Body() dto: CancelJobDto) {
+    return this.jobs.cancel(id, dto);
   }
 }

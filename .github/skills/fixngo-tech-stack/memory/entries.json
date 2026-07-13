@@ -14,7 +14,7 @@
       "maxDigestThemes": 3,
       "archive": true
     },
-    "lastGateAt": "2026-07-13T14:57:45.992Z"
+    "lastGateAt": "2026-07-13T15:08:55.431Z"
   },
   "entries": [
     {
@@ -23,33 +23,6 @@
       "note": "Rate-limit MSG91 OTP sends per phone number (e.g. 3/hour) via Redis to prevent abuse and cost blowups. Not yet verified in production.",
       "verified": false,
       "createdAt": "2026-07-11"
-    },
-    {
-      "id": "20260713150059-208y-event",
-      "category": "Event",
-      "note": "Unknown",
-      "verified": false,
-      "source": "event",
-      "capturedAt": "2026-07-13T15:00:59.736Z",
-      "createdAt": "2026-07-13"
-    },
-    {
-      "id": "20260713150104-uwez-event",
-      "category": "Event",
-      "note": "Unknown",
-      "verified": false,
-      "source": "event",
-      "capturedAt": "2026-07-13T15:01:04.401Z",
-      "createdAt": "2026-07-13"
-    },
-    {
-      "id": "20260713150108-b1ob-event",
-      "category": "Event",
-      "note": "Unknown",
-      "verified": false,
-      "source": "event",
-      "capturedAt": "2026-07-13T15:01:08.429Z",
-      "createdAt": "2026-07-13"
     }
   ]
 }

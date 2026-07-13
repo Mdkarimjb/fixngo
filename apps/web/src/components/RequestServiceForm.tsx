@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, MapPin, Wrench, CheckCircle2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { toDateTimeLocalValue } from '../lib/utils';
 
 const SERVICE_TYPES = [
   'AC Repair',
@@ -18,13 +19,14 @@ interface NewJob {
   description?: string;
   lat?: number;
   lng?: number;
+  scheduledAt?: string;
 }
-
 /** Customer form to request a new service job. */
 export function RequestServiceForm() {
   const queryClient = useQueryClient();
   const [serviceType, setServiceType] = useState('');
   const [description, setDescription] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
     null,
   );
@@ -37,6 +39,7 @@ export function RequestServiceForm() {
       queryClient.invalidateQueries({ queryKey: ['customer', 'jobs'] });
       setServiceType('');
       setDescription('');
+      setScheduledAt('');
       setCoords(null);
     },
   });
@@ -60,6 +63,7 @@ export function RequestServiceForm() {
     mutation.mutate({
       serviceType,
       description: description || undefined,
+      scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       lat: coords?.lat,
       lng: coords?.lng,
     });
@@ -120,6 +124,18 @@ export function RequestServiceForm() {
         placeholder="What needs fixing?"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
+      />
+
+      <label htmlFor="scheduled-at" className="mt-4 block text-sm font-bold text-slate-700">
+        Preferred date and time (optional)
+      </label>
+      <input
+        id="scheduled-at"
+        type="datetime-local"
+        min={toDateTimeLocalValue(new Date())}
+        className="dashboard-input mt-1.5"
+        value={scheduledAt}
+        onChange={(e) => setScheduledAt(e.target.value)}
       />
 
       <div className="mt-4 flex flex-wrap items-center gap-3">

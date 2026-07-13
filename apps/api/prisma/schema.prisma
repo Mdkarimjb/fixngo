@@ -37,29 +37,36 @@ enum PaymentStatus {
   REFUNDED
 }
 
-model User {
-  id           String      @id @default(uuid())
-  phone        String      @unique
-  email        String?     @unique
-  passwordHash String?
-  role         Role        @default(CUSTOMER)
-  isActive     Boolean     @default(true)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+enum AssignmentStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
 
-  customer     Customer?
-  technician   Technician?
+model User {
+  id           String   @id @default(uuid())
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String?
+  role         Role     @default(CUSTOMER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  customer      Customer?
+  technician    Technician?
   refreshTokens RefreshToken[]
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   tokenHash String
   expiresAt DateTime
   revokedAt DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId])
 }
@@ -72,53 +79,84 @@ model Customer {
   address   String?
   createdAt DateTime @default(now())
 
-  jobs      Job[]
-  listings  ProductListing[]
+  jobs     Job[]
+  listings ProductListing[]
 }
 
 model Technician {
-  id         String   @id @default(uuid())
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String   @unique
-  fullName   String
-  skills     String[]
-  isAvailable Boolean @default(true)
-  rating     Float    @default(0)
-  lastLat    Float?
-  lastLng    Float?
-  createdAt  DateTime @default(now())
+  id                    String    @id @default(uuid())
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String    @unique
+  fullName              String
+  skills                String[]
+  bio                   String?
+  experienceYears       Int       @default(0)
+  serviceArea           String?
+  isAvailable           Boolean   @default(true)
+  isVerified            Boolean   @default(false)
+  rating                Float     @default(0)
+  lastLat               Float?
+  lastLng               Float?
+  locationUpdatedAt     DateTime?
+  availabilityUpdatedAt DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  jobs       Job[]
+  jobs        Job[]
+  assignments JobAssignment[]
 }
 
 model Job {
-  id           String     @id @default(uuid())
-  customer     Customer   @relation(fields: [customerId], references: [id])
+  id           String      @id @default(uuid())
+  customer     Customer    @relation(fields: [customerId], references: [id])
   customerId   String
   technician   Technician? @relation(fields: [technicianId], references: [id])
   technicianId String?
   serviceType  String
   description  String?
-  status       JobStatus  @default(REQUESTED)
+  status       JobStatus   @default(REQUESTED)
   lat          Float?
   lng          Float?
   scheduledAt  DateTime?
   rating       Int?
   feedback     String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  assignedAt   DateTime?
+  acceptedAt   DateTime?
+  onSiteAt     DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
-  payment      Payment?
+  payment     Payment?
+  assignments JobAssignment[]
 
   @@index([status])
   @@index([technicianId])
+  @@index([technicianId, status, completedAt])
+}
+
+model JobAssignment {
+  id            String           @id @default(uuid())
+  job           Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId         String
+  technician    Technician       @relation(fields: [technicianId], references: [id], onDelete: Cascade)
+  technicianId  String
+  status        AssignmentStatus @default(PENDING)
+  declineReason String?
+  assignedAt    DateTime         @default(now())
+  respondedAt   DateTime?
+
+  @@index([jobId])
+  @@index([technicianId, status])
 }
 
 model Payment {
   id                String        @id @default(uuid())
   job               Job           @relation(fields: [jobId], references: [id])
   jobId             String        @unique
-  amount            Int           // in paise
+  amount            Int // in paise
   currency          String        @default("INR")
   status            PaymentStatus @default(CREATED)
   provider          String        @default("razorpay")

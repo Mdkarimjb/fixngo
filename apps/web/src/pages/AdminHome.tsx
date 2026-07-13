@@ -26,7 +26,13 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { RoleLayout } from '../components/RoleLayout';
-import { JOB_STATUS_STYLES, formatJobStatus } from '../lib/utils';
+import {
+  apiErrorMessage,
+  formatJobStatus,
+  initials,
+  JOB_STATUS_STYLES,
+  money,
+} from '../lib/utils';
 
 interface Job {
   id: string;
@@ -116,6 +122,18 @@ export function AdminHome() {
     onError: () => setAssignmentMessage(null),
   });
 
+  const cancelJob = useMutation({
+    mutationFn: async (jobId: string) =>
+      (await api.post<Job>(`/jobs/${jobId}/cancel`, {})).data,
+    onSuccess: (updatedJob) => {
+      queryClient.setQueryData<Job[]>(['admin', 'jobs'], (current = []) =>
+        current.map((job) => (job.id === updatedJob.id ? updatedJob : job)),
+      );
+      setAssignmentMessage('Job cancelled.');
+    },
+    onError: () => setAssignmentMessage(null),
+  });
+
   function selectJob(job: Job) {
     setSelectedJobId(job.id);
     setSelectedTechnicianId(job.technicianId ?? '');
@@ -190,9 +208,23 @@ export function AdminHome() {
             selectedTechnicianId={selectedTechnicianId}
             onSelectTechnician={setSelectedTechnicianId}
             onAssign={() => selectedJob && assignJob.mutate({ jobId: selectedJob.id, technicianId: selectedTechnicianId })}
+            onCancel={() => selectedJob && cancelJob.mutate(selectedJob.id)}
             onRetry={() => techniciansQuery.refetch()}
             isAssigning={assignJob.isPending}
-            error={assignJob.isError ? apiErrorMessage(assignJob.error) : null}
+            isCancelling={cancelJob.isPending}
+            error={
+              assignJob.isError
+                ? apiErrorMessage(
+                    assignJob.error,
+                    'The job could not be assigned. Please try again.',
+                  )
+                : cancelJob.isError
+                  ? apiErrorMessage(
+                      cancelJob.error,
+                      'The job could not be cancelled. Please try again.',
+                    )
+                  : null
+            }
             message={assignmentMessage}
           />
 
@@ -213,7 +245,7 @@ export function AdminHome() {
   );
 }
 
-function AssignmentPanel({ job, technicians, isLoading, isError, selectedTechnicianId, onSelectTechnician, onAssign, onRetry, isAssigning, error, message }: {
+function AssignmentPanel({ job, technicians, isLoading, isError, selectedTechnicianId, onSelectTechnician, onAssign, onCancel, onRetry, isAssigning, isCancelling, error, message }: {
   job: Job | null;
   technicians: Technician[];
   isLoading: boolean;
@@ -221,8 +253,10 @@ function AssignmentPanel({ job, technicians, isLoading, isError, selectedTechnic
   selectedTechnicianId: string;
   onSelectTechnician: (id: string) => void;
   onAssign: () => void;
+  onCancel: () => void;
   onRetry: () => void;
   isAssigning: boolean;
+  isCancelling: boolean;
   error: string | null;
   message: string | null;
 }) {
@@ -253,7 +287,12 @@ function AssignmentPanel({ job, technicians, isLoading, isError, selectedTechnic
 
           {message && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-700">{message}</p>}
           {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-xs font-bold text-red-700">{error}</p>}
-          {!isClosed && <button type="button" onClick={onAssign} disabled={!selectedTechnicianId || isAssigning || isLoading || isError} className="mt-4 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50">{isAssigning && <LoaderCircle className="h-4 w-4 animate-spin" />}{job.technicianId ? 'Reassign professional' : 'Assign professional'}</button>}
+          {!isClosed && (
+            <div className="mt-4 flex flex-col gap-2">
+              <button type="button" onClick={onAssign} disabled={!selectedTechnicianId || isAssigning || isCancelling || isLoading || isError} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50">{isAssigning && <LoaderCircle className="h-4 w-4 animate-spin" />}{job.technicianId ? 'Reassign professional' : 'Assign professional'}</button>
+              <button type="button" onClick={onCancel} disabled={isAssigning || isCancelling} className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50">{isCancelling && <LoaderCircle className="h-4 w-4 animate-spin" />} Cancel job</button>
+            </div>
+          )}
         </>
       )}
     </section>
@@ -261,7 +300,7 @@ function AssignmentPanel({ job, technicians, isLoading, isError, selectedTechnic
 }
 
 function JobRow({ job, index, selected, onSelect }: { job: Job; index: number; selected: boolean; onSelect: () => void }) {
-  const value = job.payment ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: job.payment.currency, maximumFractionDigits: 0 }).format(job.payment.amount / 100) : '—';
+  const value = job.payment ? money(job.payment.amount, job.payment.currency) : '—';
   const closed = CLOSED_STATUSES.includes(job.status);
   return <tr onClick={onSelect} className={`cursor-pointer transition ${selected ? 'bg-blue-50/80' : 'hover:bg-blue-50/30'}`}><td className="px-4 py-4"><input type="radio" name="selected-job" checked={selected} onChange={onSelect} aria-label={`Select ${job.serviceType} job`} className="h-4 w-4 cursor-pointer accent-blue-700" /></td><td className="px-2 py-4"><div className="flex items-center gap-3"><span className={`service-photo service-photo-${index % 8} h-10 w-10 shrink-0 rounded-lg`} /><div><p className="font-bold text-slate-900">{job.serviceType}</p><p className="mt-0.5 text-[11px] text-slate-400">#{job.id.slice(0, 8).toUpperCase()}</p></div></div></td><td className="px-4 py-4"><p className="font-medium text-slate-700">{job.customer.fullName}</p><p className="mt-0.5 max-w-36 truncate text-[11px] text-slate-400">{job.customer.address || 'Guntur'}</p></td><td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${JOB_STATUS_STYLES[job.status] ?? 'bg-slate-100 text-slate-600'}`}>{formatJobStatus(job.status)}</span></td><td className="px-4 py-4">{job.technician ? <div className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">{initials(job.technician.fullName)}</span><span className="text-xs font-bold text-slate-700">{job.technician.fullName}</span></div> : <button type="button" disabled={closed} onClick={(event) => { event.stopPropagation(); onSelect(); }} className="cursor-pointer text-xs font-bold text-primary disabled:cursor-not-allowed disabled:text-slate-400">Assign now</button>}</td><td className="px-4 py-4 font-heading text-base font-bold">{value}</td><td className="px-4 py-4"><button aria-label="Select job" type="button" onClick={(event) => { event.stopPropagation(); onSelect(); }} className="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-primary"><MoreHorizontal className="h-4 w-4" /></button></td></tr>;
 }
@@ -277,17 +316,6 @@ function AdminMetric({ icon: Icon, label, value, change, up = false, tone }: { i
 
 function HealthItem({ icon: Icon, title, text, color }: { icon: LucideIcon; title: string; text: string; color: string }) { return <div className="flex items-center gap-3 rounded-xl border border-slate-100 p-3"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold">{title}</p><p className="mt-0.5 text-xs text-slate-500">{text}</p></div><MoreHorizontal className="h-4 w-4 text-slate-300" /></div>; }
 
-function initials(name: string) {
-  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
-}
-
 function csvCell(value: string) {
   return `"${value.replaceAll('"', '""')}"`;
-}
-
-function apiErrorMessage(error: unknown) {
-  const response = (error as { response?: { data?: { message?: string | string[] } } }).response;
-  const message = response?.data?.message;
-  if (Array.isArray(message)) return message.join(', ');
-  return message || 'The job could not be assigned. Please try again.';
 }

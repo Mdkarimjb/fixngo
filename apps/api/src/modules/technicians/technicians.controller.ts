@@ -12,6 +12,7 @@ import {
   NearbyQueryDto,
   UpdateAvailabilityDto,
   UpdateLocationDto,
+  UpdateTechnicianProfileDto,
 } from './dto/technician.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,6 +24,21 @@ export class TechniciansController {
   @Get('me')
   getProfile(@CurrentUser() user: AuthUser) {
     return this.technicians.getProfile(user.id);
+  }
+
+  @Roles(Role.TECHNICIAN)
+  @Patch('me')
+  updateProfile(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateTechnicianProfileDto,
+  ) {
+    return this.technicians.updateProfile(user.id, dto);
+  }
+
+  @Roles(Role.TECHNICIAN)
+  @Get('me/dashboard')
+  getDashboard(@CurrentUser() user: AuthUser) {
+    return this.technicians.getDashboard(user.id);
   }
 
   @Roles(Role.TECHNICIAN)

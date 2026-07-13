@@ -1,5 +1,6 @@
 import {
   IsEnum,
+  IsDateString,
   IsInt,
   IsLatitude,
   IsLongitude,
@@ -22,6 +23,10 @@ export class CreateJobDto {
   description?: string;
 
   @IsOptional()
+  @IsDateString()
+  scheduledAt?: string;
+
+  @IsOptional()
   @IsLatitude()
   lat?: number;
 
@@ -38,6 +43,20 @@ export class AssignJobDto {
 export class UpdateJobStatusDto {
   @IsEnum(JobStatus)
   status!: JobStatus;
+}
+
+export class DeclineJobDto {
+  @IsOptional()
+  @IsString()
+  @Length(0, 300)
+  reason?: string;
+}
+
+export class CancelJobDto {
+  @IsOptional()
+  @IsString()
+  @Length(0, 300)
+  reason?: string;
 }
 
 export class RateJobDto {

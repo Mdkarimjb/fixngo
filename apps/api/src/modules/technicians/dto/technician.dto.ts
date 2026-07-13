@@ -1,10 +1,18 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsBoolean,
+  IsEmail,
+  IsInt,
   IsLatitude,
   IsLongitude,
   IsOptional,
   IsPositive,
+  IsString,
+  Length,
+  Max,
+  Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateLocationDto {
@@ -20,6 +28,42 @@ export class UpdateLocationDto {
 export class UpdateAvailabilityDto {
   @IsBoolean()
   isAvailable!: boolean;
+}
+
+export class UpdateTechnicianProfileDto {
+  @IsOptional()
+  @IsString()
+  @Length(2, 80)
+  fullName?: string;
+
+  // Omit the field to leave email unchanged; send "" to clear it — an empty
+  // string is intentionally not run through @IsEmail so clearing isn't rejected.
+  @IsOptional()
+  @ValidateIf((dto) => dto.email !== undefined && dto.email !== '')
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString({ each: true })
+  @ArrayMaxSize(15)
+  skills?: string[];
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  bio?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(60)
+  experienceYears?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 120)
+  serviceArea?: string;
 }
 
 export class NearbyQueryDto {
